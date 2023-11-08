@@ -28,83 +28,116 @@ def count_unique_item( list ):
             unique_counts[item] += 1
     return unique_counts
 
-def sortItem(unigram_count, unigram_prob, bigram_count, bigram_prob, smoothedList):
-    sorted_unigram_count = dict(sorted(unigram_count.items(), key=lambda item: -item[1]))
-    sorted_unigram_prob = unigram_prob
-    sorted_bigram_count = dict(sorted(bigram_count.items(), key=lambda item: -item[1]))
-    sorted_bigram_prob = dict(sorted(bigram_prob.items(), key=lambda item: -item[1]))
-    sorted_smoothed_list= dict(sorted(smoothedList.items(),key=lambda item: -item[1]))
-    return sorted_unigram_count, sorted_unigram_prob, sorted_bigram_count, sorted_bigram_prob ,sorted_smoothed_list
+def change_to_unk(tokenization_list, unigram_counts):
+    last_key = 'UNK'
+    unigram_counts_unk =dict(sort_desc_by_value(unigram_counts))
+    last_value =  next(reversed(unigram_counts_unk.values()))
+    replaced = list(unigram_counts_unk.popitem())
+
+    unigram_counts_unk[last_key]= last_value
+
+    tokenization_list_unk = ["UNK" if word == replaced[0] else word for word in tokenization_list ]
+
+    print(type(replaced))
+    print(replaced)
+    print( unigram_counts_unk , tokenization_list_unk)
+    return tokenization_list_unk,unigram_counts_unk
+
+
+def sort_desc_by_value( dictionary ):
+    return sorted(dictionary.items(), key=lambda item: -item[1])
 
 def token_list_to_bigram(tokenization_list):
     bigram_list = []
     for i in range (len(tokenization_list)-1):
         temp = (tokenization_list[i], tokenization_list[i+1])
         bigram_list.append(temp)
+
     return bigram_list
+
 
 def find_unigram_prob(tokenization_list, unigram_counts):
     total_count = len(tokenization_list)
-    unigram_strings = []
+    unigram_prob = {}
     for word in unigram_counts:
-        unigram_probability = {word,unigram_counts[word]/total_count}
-        unigram_strings.append(unigram_probability)
-    return unigram_strings
+        probability = unigram_counts[word]/total_count
+        unigram_prob[word]=probability
+    return unigram_prob
 
 def find_bigram_prob(bigram_list, unigram_counts, bigram_counts):
     list_of_prob = {}
     for bigram in bigram_list:
         word1 = bigram[0]
         list_of_prob[bigram] = (bigram_counts[bigram])/ (unigram_counts[word1])
-
     return list_of_prob
 
 def add_k_smoothing( unigram_counts, bigram_counts, bigram_list):
     smoothed_list= {}
     uniqueWordCount = len(unigram_counts)
-    k = 1.5
-    
+    k = 0.5
     for bigram in bigram_list:
-        word1 = bigram[0]
-        smoothed_list[bigram] = (bigram_counts[bigram]+ k)  / (unigram_counts[word1] + (k*uniqueWordCount))
+        word = bigram[0]
+        smoothed_list[bigram] = (bigram_counts[bigram]+ k)  / (unigram_counts[word] + (k*uniqueWordCount))
+
+    # Add 0 probabilities
+    for word1 in unigram_counts:
+        for word2 in unigram_counts:
+            if ((word1,word2) not in bigram_counts):
+                smoothed_list[(word1,word2)] = ( k)  / (unigram_counts[word1] + (k*uniqueWordCount))
     return smoothed_list
-  
 
-def write_file(file_name_write,  unigram_counts, unigram_probability, bigram_counts, bigram_probability, sentence_count, total_word_count,smoothed_list):
-    
+def write_file_line( fw, label, value):
+    line = str(label)+" : "+str(value)+"\n"
+    fw.write(line)
+
+def write_ngram_info(fw, label, ngram_count, ngram_probability):
+    fw.write("\n"+str(label)+"\n")
+    for couple in sort_desc_by_value(ngram_count):
+        word = couple[0]
+        count = couple[1]
+        probability = ngram_probability.get(word)
+        fw.write(str(word)+" \t "+str(count)+" \t "+str(probability)+"\n")
+
+def write_smoothed_info(fw, label, bigram_probability, smoothed_probability):
+    limit = 100
+    fw.write("\n"+str(label)+"\n")
+    for couple in sort_desc_by_value(smoothed_probability):
+        limit = limit - 1
+        word = couple[0]
+        smoothed = couple[1]
+        probability = bigram_probability.get(word)
+        fw.write(str(word)+" \t "+str(probability)+" \t "+str(smoothed)+"\n")
+        if(limit<1):
+            break
+
+def write_file(file_name_write,  unigram_counts, unigram_probability, 
+               bigram_counts, bigram_probability, sentence_count, 
+               total_word_count,smoothed_list, ):
     with codecs.open(file_name_write, 'w', encoding="utf-8") as fw:
+        write_file_line(fw,"Cümle sayısı",sentence_count)
+        write_file_line(fw,"Toplam kelime sayısı",total_word_count)
+        write_file_line(fw,"Unique kelime sayısı",len(unigram_counts))
 
-        fw.write("Cümle sayısı : ")
-        fw.write(str(sentence_count))
-        fw.write("\nToplam kelime sayısı : ")
-        fw.write(str(total_word_count))
-        fw.write("\nUnique kelime sayısı : ")
-        fw.write(str(len(unigram_counts)))
-        fw.write("\nUnigram sayıları: \n")
-        fw.write(str(unigram_counts))
-        fw.write("\nUnigram olasılıkları: \n")
-        fw.write(str(unigram_probability))
-        fw.write("\nBigram sayıları: \n")
-        fw.write(str(bigram_counts))
-        fw.write("\nBigram olasılıkları : \n")
-        fw.write(str(bigram_probability))
-        fw.write("\nAdd k Smoothing olasılıkları: \n")
-        fw.write(str(smoothed_list))
+        write_ngram_info(fw, "Unigram Bilgileri", unigram_counts, unigram_probability)
+        write_ngram_info(fw, "Bigram Bilgileri", bigram_counts, bigram_probability) 
 
-    #bigram_data = str(bigram_calculations(file_name_open))
+        write_smoothed_info(fw,"Add k Smoothing olasılıkları",bigram_probability, dict(smoothed_list))
     fw.close()
 
 if __name__ == "__main__":
     file_name = "deneme.txt"
     tokenization_list = tokenize_file(file_name)
     unigram_counts = count_unique_item(tokenization_list)
-    unigram_probability= find_unigram_prob(tokenization_list, unigram_counts)
-    bigram_list = token_list_to_bigram(tokenization_list)
-    bigram_counts = count_unique_item(bigram_list)
-    bigram_probability = find_bigram_prob(bigram_list,unigram_counts,bigram_counts)
+    tokenization_list_unk, unigram_counts_unk = change_to_unk(tokenization_list,unigram_counts)
+    unigram_probability= find_unigram_prob(tokenization_list_unk, unigram_counts_unk)
+    bigram_list_unk = token_list_to_bigram(tokenization_list_unk)
+    bigram_counts_unk = count_unique_item(bigram_list_unk)
+    bigram_probability = find_bigram_prob(bigram_list_unk,unigram_counts_unk,bigram_counts_unk)
     sentence_count = unigram_counts["</s>"]
     total_word_count = len(tokenization_list)
-    smoothed_list = add_k_smoothing(unigram_counts,bigram_counts, bigram_list)
-    sorted_unigram_count, sorted_unigram_prob, sorted_bigram_count, sorted_bigram_prob, sorted_smoothed_list = sortItem(unigram_counts,bigram_list,bigram_counts,bigram_probability, smoothed_list)
-    
-    write_file("sonuc.txt",sorted_unigram_count, unigram_probability, sorted_bigram_count, sorted_bigram_prob, sentence_count, total_word_count, sorted_smoothed_list)
+    smoothed_list = add_k_smoothing(unigram_counts_unk,bigram_counts_unk, bigram_list_unk)
+    #sentence1 = input("Lütfen birinci cümleyi giriniz: ")
+    #sentence2 = input("Lütfen ikinci cümleyi giriniz: ")
+    write_file("sonuc.txt", unigram_counts_unk, unigram_probability,
+                bigram_counts_unk, bigram_probability, sentence_count,
+                total_word_count, sort_desc_by_value(smoothed_list))
