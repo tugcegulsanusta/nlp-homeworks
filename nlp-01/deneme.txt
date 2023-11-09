@@ -1,4 +1,0 @@
- Sen dün eve geldin </s>
-<s> Sen eve gittin </s>
-<s> eve sen gittin </s>
-<s> Eve geldin </s>
